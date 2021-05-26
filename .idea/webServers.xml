@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="f6ffed41-f9a2-47b7-8e81-e298f77515af" name="tw2112">
+        <fileTransfer rootFolder="/home/tw2112" accessType="SFTP" host="greene.hpc.nyu.edu" port="22" sshConfigId="ad84d769-3732-4c77-b2c7-f2b9e893b898" sshConfig="tw2112@greene.hpc.nyu.edu:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
