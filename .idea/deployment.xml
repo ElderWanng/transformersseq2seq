@@ -1,4 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" serverName="tw2112" remoteFilesAllowedToDisappearOnAutoupload="false" />
+  <component name="PublishConfigData" autoUpload="Always" serverName="tw2112" remoteFilesAllowedToDisappearOnAutoupload="false">
+    <serverData>
+      <paths name="tw2112">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/codes/s2s" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+          <excludedPaths>
+            <excludedPath local="true" path="$PROJECT_DIR$/venv" />
+          </excludedPaths>
+        </serverdata>
+      </paths>
+      <paths name="zp">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/wts/s2s" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+          <excludedPaths>
+            <excludedPath local="true" path="$PROJECT_DIR$/venv" />
+          </excludedPaths>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
 </project>

@@ -3,6 +3,9 @@
   <component name="SshConfigs">
     <configs>
       <sshConfig authType="PASSWORD" host="greene.hpc.nyu.edu" id="ad84d769-3732-4c77-b2c7-f2b9e893b898" port="22" nameFormat="DESCRIPTIVE" username="tw2112" />
+      <sshConfig authType="PASSWORD" host="greene.hpc.nyu.edu" id="9342ba32-2c4b-41b5-9819-9a666c67bfeb" port="22" customName="zp" nameFormat="CUSTOM" username="zp2053">
+        <option name="customName" value="zp" />
+      </sshConfig>
     </configs>
   </component>
 </project>
