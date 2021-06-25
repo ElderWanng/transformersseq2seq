@@ -1,5 +1,4 @@
 import itertools
-import pathlib
 from typing import Optional
 
 import datasets
@@ -32,14 +31,13 @@ from transformers import (
 
 # import utils
 from data import PLDataModule
-from multitask_dataset import MultiTaskDataset
 from utils import summarization_name_mapping, mykey
 
+# os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import sys
 # its win32, maybe there is win64 too?
 if sys.platform.startswith('win'):
     os.environ["PL_TORCH_DISTRIBUTED_BACKEND"] = "Gloo"
-# os.environ["TOKENIZERS_PARALLELISM"] = "false"
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.NOTSET)
 # You should update this to your particular problem to have better documentation of `model_type`
@@ -51,10 +49,12 @@ class S2STransformer(pl.LightningModule):
         super(S2STransformer, self).__init__()
         # self.hparams = hparams
         self.save_hyperparameters()
-        self.model_name_or_path = hparams.model_name_or_path
         self.source_prefix = hparams.source_prefix
-
-        self.data_on_disk_path = hparams.data_on_disk_path
+        self.model_name_or_path = hparams.model_name_or_path
+        self.dataset_name = hparams.dataset_name
+        self.dataset_config_name = hparams.dataset_config_name
+        self.train_file = hparams.train_file
+        self.validation_file = hparams.validation_file
         self.use_slow_tokenizer = hparams.use_slow_tokenizer
         self.overwrite_cache = hparams.overwrite_cache
         self.ignore_pad_token_for_loss = hparams.ignore_pad_token_for_loss
@@ -74,12 +74,12 @@ class S2STransformer(pl.LightningModule):
 
         self.config = AutoConfig.from_pretrained(self.model_name_or_path)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name_or_path, use_fast=not self.use_slow_tokenizer)
-        self.tokenizer.add_special_tokens({"additional_special_tokens": ["[sum]", "[aux]", '[ent]', "[con]",'[neu]']})
         self.model = AutoModelForSeq2SeqLM.from_pretrained(
             self.model_name_or_path,
             from_tf=bool(".ckpt" in self.model_name_or_path),
             config=self.config,
         )
+
         self.model.resize_token_embeddings(len(self.tokenizer))
         self.prefix = self.source_prefix if self.source_prefix is not None else ""
 
@@ -89,27 +89,58 @@ class S2STransformer(pl.LightningModule):
 
     def setup(self, stage: Optional[str] = None) -> None:
 
-
+        # Sanity checks
+        if self.dataset_name is None and self.train_file is None and self.validation_file is None:
+            raise ValueError("Need either a dataset name or a training/validation file.")
+        else:
+            if self.train_file is not None:
+                extension = self.train_file.split(".")[-1]
+                assert extension in ["csv", "json"], "`train_file` should be a csv or a json file."
+            if self.validation_file is not None:
+                extension = self.validation_file.split(".")[-1]
+                assert extension in ["csv", "json"], "`validation_file` should be a csv or a json file."
 
         if self.output_dir is not None:
             os.makedirs(self.output_dir, exist_ok=True)
-
-        data_on_disk_path = self.data_on_disk_path
-        main_dataset_path = pathlib.Path(data_on_disk_path,"main_dataset").as_posix()
-        nli_dataset_path = pathlib.Path(data_on_disk_path, "nli_dataset").as_posix()
-        main_datast = datasets.load_from_disk(main_dataset_path)
-        nli_dataset = datasets.load_from_disk(nli_dataset_path)
-
-
-
+        if self.dataset_name is not None:
+            # Downloading and loading a dataset from the hub.
+            raw_datasets = load_dataset(self.dataset_name, self.dataset_config_name, )
+            dataset_columns = summarization_name_mapping.get(self.dataset_name, None)
+        else:
+            data_files = {}
+            if self.train_file is not None:
+                data_files["train"] = self.train_file
+            if self.validation_file is not None:
+                data_files["validation"] = self.validation_file
+            # if self.aux_file is not None:
+            if hasattr(self,"aux_file"):
+                data_files["auxiliary"] = self.aux_file
+            extension = self.train_file.split(".")[-1]
+            raw_datasets = load_dataset(extension, data_files=data_files)
 
         if self.val_max_target_length is None:
             self.val_max_target_length = self.max_target_length
 
         # First we tokenize all the texts.
-        main_column_names = main_datast["train"].column_names
-        text_column = main_column_names[0]
-        summary_column = main_column_names[1]
+        column_names = raw_datasets["train"].column_names
+        dataset_columns = summarization_name_mapping.get(self.dataset_name, None)
+        if self.text_column is None:
+            text_column = dataset_columns[0] if dataset_columns is not None else column_names[0]
+        else:
+            text_column = self.text_column
+            if text_column not in column_names:
+                raise ValueError(
+                    f"--text_column' value '{self.text_column}' needs to be one of: {', '.join(column_names)}"
+                )
+        if self.summary_column is None:
+            summary_column = dataset_columns[1] if dataset_columns is not None else column_names[1]
+        else:
+            summary_column = self.summary_column
+            if summary_column not in column_names:
+                raise ValueError(
+                    f"--summary_column' value '{self.summary_column}' needs to be one of: {', '.join(column_names)}"
+                )
+
         label_pad_token_id = -100 if self.ignore_pad_token_for_loss else self.tokenizer.pad_token_id
         pad_to_max_length = self.pad_to_max_length
         ignore_pad_token_for_loss = self.ignore_pad_token_for_loss
@@ -141,22 +172,15 @@ class S2STransformer(pl.LightningModule):
             return model_inputs
 
 
-        nli_column_names = nli_dataset["train"].column_names
-        processed_main_datasets = main_datast.map(
+        # for key,item in raw_datasets.items():
+        #     raw_datasets[key] = raw_datasets[key][:200]
+        processed_datasets = raw_datasets.map(
             function=preprocess_function,
             batched=True,
-            remove_columns=main_column_names,
+            remove_columns=column_names,
             load_from_cache_file=not self.overwrite_cache,
             num_proc=4
         )
-        processed_nli_datasets = nli_dataset.map(
-            function=preprocess_function,
-            batched=True,
-            remove_columns=nli_column_names,
-            load_from_cache_file=not self.overwrite_cache,
-            num_proc=4
-        )
-
 
         data_collator = DataCollatorForSeq2Seq(
             self.tokenizer,
@@ -166,27 +190,14 @@ class S2STransformer(pl.LightningModule):
             # truncation=True
             # pad_to_multiple_of=8 if accelerator.use_fp16 else None,
         )
-        train_main_dataset = processed_main_datasets["train"]
-        train_nli_dataset = processed_nli_datasets["train"]
-
-        eval_dataset = processed_main_datasets["validation"]
-
-
-        mtds = MultiTaskDataset([train_main_dataset,train_nli_dataset])
-        print(mtds.rs)
-
-
-        self.train_dataset = mtds
+        train_dataset = processed_datasets["train"]
+        eval_dataset = processed_datasets["validation"]
+        self.train_dataset = train_dataset
         self.eval_dataset = eval_dataset
         self.data_collator = data_collator
         # print(self.trainer)
-
         self.rouge_metric = load_metric('rouge',process_id=self.trainer.local_rank,num_process=self.trainer.world_size,experiment_id="My_experiment_10",cache_dir="./.cache")
-        # for i in range(200):
-        #     print(mtds[i])
-        #     # print(tokenizer.decode(mtds[i]["input_ids"]))
-        #     for k,v in mtds[i].items():
-        #         print(k,self.tokenizer.decode(v))
+
 
     def train_dataloader(self):
         return DataLoader(
@@ -256,6 +267,21 @@ class S2STransformer(pl.LightningModule):
         if self.ignore_pad_token_for_loss:
             labels = torch.where(labels != -100, labels, self.tokenizer.pad_token_id)
 
+        # generated_tokens = pad_across_processes(generated_tokens,dim=1, pad_index=self.tokenizer.pad_token_id)
+        # generated_tokens = self.all_gather(generated_tokens)
+        #
+        # if self.ignore_pad_token_for_loss:
+        #     labels = torch.where(labels != -100, labels, self.tokenizer.pad_token_id)
+        # if not self.pad_to_max_length:
+        #     # If we did not pad to max length, we need to pad the labels too
+        #     labels = pad_across_processes(labels, dim=1, pad_index=self.tokenizer.pad_token_id)
+        # labels = self.all_gather(labels)
+        #
+        # # print(generated_tokens.shape, f"from {self.trainer.local_rank}")
+        # if self.trainer.world_size>1:
+        #     generated_tokens = generated_tokens.reshape([generated_tokens.size(0) * generated_tokens.size(1), -1])
+        #     labels = labels.reshape([labels.size(0) * labels.size(1), -1])
+
         decoded_preds = self.tokenizer.batch_decode(generated_tokens, skip_special_tokens=True,clean_up_tokenization_spaces=True)
         decoded_labels = self.tokenizer.batch_decode(labels, skip_special_tokens=True,clean_up_tokenization_spaces=True)
 
@@ -280,6 +306,9 @@ class S2STransformer(pl.LightningModule):
         decoded_preds, decoded_labels = self._generate(batch)
         self.rouge_metric.add_batch(predictions=decoded_preds, references=decoded_labels)
 
+    # def validation_step_end(self, *args, **kwargs) -> Optional[STEP_OUTPUT]:
+    #     result = self.rouge_metric.compute(use_stemmer=True)
+    #     print(result,f"rank is {self.local_rank}")
 
     def validation_epoch_end(self, outputs: EPOCH_OUTPUT) -> None:
         result = self.rouge_metric.compute(use_stemmer=True)
@@ -308,36 +337,28 @@ class S2STransformer(pl.LightningModule):
 
     @staticmethod
     def add_model_specific_args(parser):
-        # # parser = argparse.ArgumentParser(description="Finetune a transformers model on a text classification task")
-        # parser.add_argument(
-        #     "--dataset_name",
-        #     type=str,
-        #     default=None,
-        #     help="The name of the dataset to use (via the datasets library).",
-        # )
-        # parser.add_argument(
-        #     "--dataset_config_name",
-        #     type=str,
-        #     default=None,
-        #     help="The configuration name of the dataset to use (via the datasets library).",
-        # )
-        # parser.add_argument(
-        #     "--train_file", type=str, default=None, help="A csv or a json file containing the training data."
-        # )
-        # parser.add_argument(
-        #     "--validation_file", type=str, default=None, help="A csv or a json file containing the validation data."
-        # )
-        # parser.add_argument(
-        #     "--aux_file", type=str, default=None, help="A csv or a json file containing the aux data."
-        # )
+        # parser = argparse.ArgumentParser(description="Finetune a transformers model on a text classification task")
         parser.add_argument(
-            "--data_on_disk_path",
+            "--dataset_name",
             type=str,
             default=None,
-            help="the path to store main and nli datasets path",
-            required=True
+            help="The name of the dataset to use (via the datasets library).",
         )
-
+        parser.add_argument(
+            "--dataset_config_name",
+            type=str,
+            default=None,
+            help="The configuration name of the dataset to use (via the datasets library).",
+        )
+        parser.add_argument(
+            "--train_file", type=str, default=None, help="A csv or a json file containing the training data."
+        )
+        parser.add_argument(
+            "--validation_file", type=str, default=None, help="A csv or a json file containing the validation data."
+        )
+        parser.add_argument(
+            "--aux_file", type=str, default=None, help="A csv or a json file containing the aux data."
+        )
         parser.add_argument(
             "--ignore_pad_token_for_loss",
             type=bool,
@@ -508,15 +529,15 @@ if __name__ == '__main__':
     argument = parser.parse_args()
     model = S2STransformer(argument)
     wandb.login(key=mykey)
-    wandb_logger = WandbLogger(project='S2S_WITH_AUX', log_model='all')
+    wandb_logger = WandbLogger(project='S2S', log_model='all')
     checkpoint_callback = ModelCheckpoint(
         monitor='rouge1',
         verbose=True,
         dirpath= argument.output_dir,
         filename='s2s_with_aux-{epoch:02d}-{rouge1:.2f}',
-        save_top_k=10,
+        save_top_k=5,
         mode='max',
-        # every_n_val_epochs=1
+        every_n_val_epochs=1
     )
     if torch.cuda.is_available():
         trainer = Trainer(gpus=argument.gpus,
