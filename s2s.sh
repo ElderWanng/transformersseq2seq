@@ -7,4 +7,4 @@ xsum \
 --gpus 4 \
 --num_beams 5 \
 --per_device_train_batch_size \
-48
+12
