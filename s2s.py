@@ -66,7 +66,7 @@ class S2STransformer(pl.LightningModule):
         self.text_column = hparams.text_column
         self.summary_column = hparams.summary_column
         self.learning_rate = hparams.learning_rate
-        self.per_device_train_batch_size = hparams.per_device_train_batch_size
+        self.batch_size = hparams.batch_size#batch_size
         self.per_device_eval_batch_size = hparams.per_device_eval_batch_size
         # self.dataloader_num_workers = hparams.dataloader_num_workers
         self.val_max_target_length = hparams.val_max_target_length
@@ -187,22 +187,20 @@ class S2STransformer(pl.LightningModule):
             model=self.model,
             label_pad_token_id=label_pad_token_id,
             padding=True,
-            # truncation=True
-            # pad_to_multiple_of=8 if accelerator.use_fp16 else None,
+            pad_to_multiple_of=8
         )
         train_dataset = processed_datasets["train"]
         eval_dataset = processed_datasets["validation"]
         self.train_dataset = train_dataset
         self.eval_dataset = eval_dataset
         self.data_collator = data_collator
-        # print(self.trainer)
         self.rouge_metric = load_metric('rouge',process_id=self.trainer.local_rank,num_process=self.trainer.world_size,experiment_id="My_experiment_10",cache_dir="./.cache")
 
 
     def train_dataloader(self):
         return DataLoader(
             self.train_dataset,
-            batch_size=self.per_device_train_batch_size,
+            batch_size=self.batch_size,
             collate_fn=self.data_collator,
         )
 
@@ -260,27 +258,10 @@ class S2STransformer(pl.LightningModule):
             new_tensor[indices] = data
             return new_tensor
 
-
-
         if isinstance(generated_tokens, tuple):
             generated_tokens = generated_tokens[0]
         if self.ignore_pad_token_for_loss:
             labels = torch.where(labels != -100, labels, self.tokenizer.pad_token_id)
-
-        # generated_tokens = pad_across_processes(generated_tokens,dim=1, pad_index=self.tokenizer.pad_token_id)
-        # generated_tokens = self.all_gather(generated_tokens)
-        #
-        # if self.ignore_pad_token_for_loss:
-        #     labels = torch.where(labels != -100, labels, self.tokenizer.pad_token_id)
-        # if not self.pad_to_max_length:
-        #     # If we did not pad to max length, we need to pad the labels too
-        #     labels = pad_across_processes(labels, dim=1, pad_index=self.tokenizer.pad_token_id)
-        # labels = self.all_gather(labels)
-        #
-        # # print(generated_tokens.shape, f"from {self.trainer.local_rank}")
-        # if self.trainer.world_size>1:
-        #     generated_tokens = generated_tokens.reshape([generated_tokens.size(0) * generated_tokens.size(1), -1])
-        #     labels = labels.reshape([labels.size(0) * labels.size(1), -1])
 
         decoded_preds = self.tokenizer.batch_decode(generated_tokens, skip_special_tokens=True,clean_up_tokenization_spaces=True)
         decoded_labels = self.tokenizer.batch_decode(labels, skip_special_tokens=True,clean_up_tokenization_spaces=True)
@@ -302,13 +283,9 @@ class S2STransformer(pl.LightningModule):
 
 
     def validation_step(self,batch, batch_idx):
-        # print(batch.keys(),self.trainer.local_rank)
         decoded_preds, decoded_labels = self._generate(batch)
         self.rouge_metric.add_batch(predictions=decoded_preds, references=decoded_labels)
 
-    # def validation_step_end(self, *args, **kwargs) -> Optional[STEP_OUTPUT]:
-    #     result = self.rouge_metric.compute(use_stemmer=True)
-    #     print(result,f"rank is {self.local_rank}")
 
     def validation_epoch_end(self, outputs: EPOCH_OUTPUT) -> None:
         result = self.rouge_metric.compute(use_stemmer=True)
@@ -462,7 +439,7 @@ class S2STransformer(pl.LightningModule):
             help="If passed, will use a slow tokenizer (not backed by the 🤗 Tokenizers library).",
         )
         parser.add_argument(
-            "--per_device_train_batch_size",
+            "--batch_size",
             type=int,
             default=8,
             help="Batch size (per device) for the training dataloader.",
@@ -535,7 +512,7 @@ if __name__ == '__main__':
         verbose=True,
         dirpath= argument.output_dir,
         filename='s2s_with_aux-{epoch:02d}-{rouge1:.2f}',
-        save_top_k=5,
+        save_top_k=10,
         mode='max',
         every_n_val_epochs=1
     )
@@ -543,13 +520,17 @@ if __name__ == '__main__':
         trainer = Trainer(gpus=argument.gpus,
                           accelerator='ddp',
                           logger=wandb_logger,
+                          precision=16,
+                          callbacks=[checkpoint_callback]
                           # val_check_interval=0.01
                           )
     else:
         trainer = Trainer(logger=wandb_logger,
+                          callbacks=[checkpoint_callback]
                           # val_check_interval=0.01
                           )
     wandb_logger.watch(model)
+    # trainer.tune(model)
     trainer.fit(model)
     # trainer.validate(model)
 

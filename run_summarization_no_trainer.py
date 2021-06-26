@@ -28,6 +28,7 @@ import datasets
 import nltk
 import numpy as np
 import torch
+import wandb
 from datasets import load_dataset, load_metric
 from torch.utils.data.dataloader import DataLoader
 from tqdm.auto import tqdm
@@ -49,6 +50,7 @@ from transformers import (
 )
 from transformers.file_utils import is_offline_mode
 
+from utils import mykey
 
 logger = logging.getLogger(__name__)
 # You should update this to your particular problem to have better documentation of `model_type`
@@ -274,6 +276,9 @@ def parse_args():
 
 
 def main():
+    wandb.init(project="hugging face")
+    wandb.login(key=mykey)
+    # wandb_logger = WandbLogger(project='S2S_WITH_AUX', log_model='all')
     args = parse_args()
 
     if args.source_prefix is None and args.model_name_or_path in [
@@ -523,7 +528,7 @@ def main():
 
             if completed_steps >= args.max_train_steps:
                 break
-
+            wandb.log({"loss": loss.item()})
         model.eval()
         if args.val_max_target_length is None:
             args.val_max_target_length = args.max_target_length

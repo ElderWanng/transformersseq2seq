@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="tw2112" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="zp" remoteFilesAllowedToDisappearOnAutoupload="false" showAutoUploadSettingsWarning="false">
     <serverData>
       <paths name="greene.hpc.nyu.edu">
         <serverdata>
@@ -17,6 +17,7 @@
           <excludedPaths>
             <excludedPath local="true" path="$PROJECT_DIR$/venv" />
             <excludedPath local="true" path="$PROJECT_DIR$/wandb" />
+            <excludedPath local="true" path="$PROJECT_DIR$/.cache" />
           </excludedPaths>
         </serverdata>
       </paths>

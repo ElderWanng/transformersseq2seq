@@ -97,17 +97,18 @@ class S2STransformer(pl.LightningModule):
         data_on_disk_path = self.data_on_disk_path
         main_dataset_path = pathlib.Path(data_on_disk_path,"main_dataset").as_posix()
         nli_dataset_path = pathlib.Path(data_on_disk_path, "nli_dataset").as_posix()
-        main_datast = datasets.load_from_disk(main_dataset_path)
+        main_dataset = datasets.load_from_disk(main_dataset_path)
         nli_dataset = datasets.load_from_disk(nli_dataset_path)
 
-
+        print(main_dataset["train"][4])
+        print(nli_dataset["train"][4])
 
 
         if self.val_max_target_length is None:
             self.val_max_target_length = self.max_target_length
 
         # First we tokenize all the texts.
-        main_column_names = main_datast["train"].column_names
+        main_column_names = main_dataset["train"].column_names
         text_column = main_column_names[0]
         summary_column = main_column_names[1]
         label_pad_token_id = -100 if self.ignore_pad_token_for_loss else self.tokenizer.pad_token_id
@@ -142,7 +143,7 @@ class S2STransformer(pl.LightningModule):
 
 
         nli_column_names = nli_dataset["train"].column_names
-        processed_main_datasets = main_datast.map(
+        processed_main_datasets = main_dataset.map(
             function=preprocess_function,
             batched=True,
             remove_columns=main_column_names,
@@ -179,14 +180,9 @@ class S2STransformer(pl.LightningModule):
         self.train_dataset = mtds
         self.eval_dataset = eval_dataset
         self.data_collator = data_collator
-        # print(self.trainer)
+        print(len(self.train_dataset))
 
         self.rouge_metric = load_metric('rouge',process_id=self.trainer.local_rank,num_process=self.trainer.world_size,experiment_id="My_experiment_10",cache_dir="./.cache")
-        # for i in range(200):
-        #     print(mtds[i])
-        #     # print(tokenizer.decode(mtds[i]["input_ids"]))
-        #     for k,v in mtds[i].items():
-        #         print(k,self.tokenizer.decode(v))
 
     def train_dataloader(self):
         return DataLoader(
@@ -213,6 +209,15 @@ class S2STransformer(pl.LightningModule):
         return optimizer
 
     def training_step(self, batch, batch_idx):
+        # if self.local_rank==0:
+        #     print(batch)
+        #     strings = self.tokenizer.batch_decode(batch["input_ids"])
+        #     labels2 = batch["labels"]
+        #     labels2 = torch.where(labels2 != -100, labels2, self.tokenizer.pad_token_id)
+        #     strings2 = self.tokenizer.batch_decode(labels2)
+        #     # print(strings2)
+        #     for s1,s2 in zip(strings,strings2):
+        #         print(f"{s1}\t{s2}")
         loss = self.model(**batch).loss
         self.log('train_loss', loss, on_epoch=True,on_step=True)
         return loss
@@ -522,14 +527,16 @@ if __name__ == '__main__':
         trainer = Trainer(gpus=argument.gpus,
                           accelerator='ddp',
                           logger=wandb_logger,
+                          callbacks=[checkpoint_callback]
                           # val_check_interval=0.01
                           )
     else:
         trainer = Trainer(logger=wandb_logger,
+                          callbacks=[checkpoint_callback]
                           # val_check_interval=0.01
                           )
     wandb_logger.watch(model)
     trainer.fit(model)
-    # trainer.validate(model)
+    # trainer.validate(model
 
 
