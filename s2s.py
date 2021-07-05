@@ -40,6 +40,7 @@ import sys
 # its win32, maybe there is win64 too?
 if sys.platform.startswith('win'):
     os.environ["PL_TORCH_DISTRIBUTED_BACKEND"] = "Gloo"
+# os.environ["TOKENIZERS_PARALLELISM"] = "false"
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.NOTSET)
 # You should update this to your particular problem to have better documentation of `model_type`
@@ -79,6 +80,7 @@ class S2STransformer(pl.LightningModule):
 
         self.config = AutoConfig.from_pretrained(self.model_name_or_path)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name_or_path, use_fast=not self.use_slow_tokenizer)
+
         self.model = AutoModelForSeq2SeqLM.from_pretrained(
             self.model_name_or_path,
             from_tf=bool(".ckpt" in self.model_name_or_path),
@@ -207,7 +209,7 @@ class S2STransformer(pl.LightningModule):
     def train_dataloader(self):
         return DataLoader(
             self.train_dataset,
-            batch_size=self.batch_size,
+            batch_size=self.per_device_train_batch_size,
             collate_fn=self.data_collator,
             shuffle=True,
         )
@@ -238,12 +240,12 @@ class S2STransformer(pl.LightningModule):
 
         optimizer = AdamW(optimizer_grouped_parameters,
                           self.learning_rate)
-        # todo add add beta
+        # todo add beta
         lr_scheduler = get_scheduler(
             name=self.lr_scheduler_type,
             optimizer=optimizer,
             num_warmup_steps=self.num_warmup_steps,
-            num_training_steps=15000000
+            num_training_steps=55000
         )
         lr_dict = {
             # REQUIRED: The scheduler instance
@@ -270,6 +272,7 @@ class S2STransformer(pl.LightningModule):
         else:
             labels = batch["labels"]
             loss = loss_label_smoothing(result, labels,self.label_pad_token_id, self.label_smoothing)
+            self.log('original_train_loss', result.loss, on_epoch=True, on_step=True)
         self.log('train_loss', loss, on_epoch=True,on_step=True)
         return loss
 
@@ -486,7 +489,7 @@ class S2STransformer(pl.LightningModule):
             help="If passed, will use a slow tokenizer (not backed by the 🤗 Tokenizers library).",
         )
         parser.add_argument(
-            "--batch_size",
+            "--per_device_train_batch_size",
             type=int,
             default=8,
             help="Batch size (per device) for the training dataloader.",
@@ -503,6 +506,9 @@ class S2STransformer(pl.LightningModule):
             default=5e-5,
             help="Initial learning rate (after the potential warmup period) to use.",
         )
+        parser.add_argument("--weight_decay", type=float, default=0.0, help="Weight decay to use.")
+        parser.add_argument("--num_train_epochs", type=int, default=3,
+                            help="Total number of training epochs to perform.")
         parser.add_argument(
             "--label_smoothing",
             type=float,
@@ -582,13 +588,14 @@ if __name__ == '__main__':
                           logger=wandb_logger,
                           gradient_clip_val = argument.clip_norm,
                           precision=16,
-                          callbacks=[checkpoint_callback,lr_monitor]
-                          # val_check_interval=0.01
+                          callbacks=[checkpoint_callback,lr_monitor],
+                          val_check_interval=0.25
                           )
     else:
         trainer = Trainer(logger=wandb_logger,
-                          callbacks=[checkpoint_callback,lr_monitor]
+                          callbacks=[checkpoint_callback,lr_monitor],
                           # val_check_interval=0.01
+                          val_check_interval=0.25
                           )
     wandb_logger.watch(model)
     trainer.fit(model)

@@ -15,7 +15,7 @@ $SCRATCH/exp_out \
 --clip_norm \
 0.1 \
 --num_warmup_steps \
-1000 \
+500 \
 --lr_scheduler_type \
 polynomial \
 --weight_decay \

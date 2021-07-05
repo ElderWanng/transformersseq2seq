@@ -13,7 +13,7 @@ import os
 
 # from accelerate import Accelerator
 import torch.distributed
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
 import wandb
 from datasets import load_dataset, load_metric
@@ -27,13 +27,15 @@ from transformers import (
     AutoConfig,
     AutoModelForSeq2SeqLM,
     AutoTokenizer,
-    SchedulerType, DataCollatorForSeq2Seq,
+    SchedulerType,
+    DataCollatorForSeq2Seq,
+    get_scheduler,
 )
 
 # import utils
 from data import PLDataModule
 from multitask_dataset import MultiTaskDataset
-from utils import summarization_name_mapping, mykey
+from utils import summarization_name_mapping, mykey, loss_label_smoothing
 
 import sys
 # its win32, maybe there is win64 too?
@@ -65,8 +67,11 @@ class S2STransformer(pl.LightningModule):
         self.output_dir = hparams.output_dir
         self.text_column = hparams.text_column
         self.summary_column = hparams.summary_column
+        self.label_smoothing = hparams.label_smoothing
         self.learning_rate = hparams.learning_rate
+        self.num_warmup_steps = hparams.num_warmup_steps
         self.per_device_train_batch_size = hparams.per_device_train_batch_size
+        self.lr_scheduler_type = hparams.lr_scheduler_type
         self.per_device_eval_batch_size = hparams.per_device_eval_batch_size
         # self.dataloader_num_workers = hparams.dataloader_num_workers
         self.val_max_target_length = hparams.val_max_target_length
@@ -80,8 +85,11 @@ class S2STransformer(pl.LightningModule):
             from_tf=bool(".ckpt" in self.model_name_or_path),
             config=self.config,
         )
+
         self.model.resize_token_embeddings(len(self.tokenizer))
         self.prefix = self.source_prefix if self.source_prefix is not None else ""
+        self.label_pad_token_id = -100 if self.ignore_pad_token_for_loss else self.tokenizer.pad_token_id
+        self.weight_decay = hparams.weight_decay
 
 
 
@@ -189,6 +197,7 @@ class S2STransformer(pl.LightningModule):
             self.train_dataset,
             batch_size=self.per_device_train_batch_size,
             collate_fn=self.data_collator,
+            shuffle=True,
         )
 
     def val_dataloader(self):
@@ -203,22 +212,53 @@ class S2STransformer(pl.LightningModule):
         return self.model(**batch)
 
     def configure_optimizers(self):
-        optimizer = AdamW(self.parameters(),
+        no_decay = ["bias", "LayerNorm.weight"]
+        optimizer_grouped_parameters = [
+            {
+                "params": [p for n, p in self.model.named_parameters() if not any(nd in n for nd in no_decay)],
+                "weight_decay": self.weight_decay,
+            },
+            {
+                "params": [p for n, p in self.model.named_parameters() if any(nd in n for nd in no_decay)],
+                "weight_decay": 0.0,
+            },
+        ]
+
+        optimizer = AdamW(optimizer_grouped_parameters,
                           self.learning_rate)
-        # todo add add beta
-        return optimizer
+        # todo add beta
+        lr_scheduler = get_scheduler(
+            name=self.lr_scheduler_type,
+            optimizer=optimizer,
+            num_warmup_steps=self.num_warmup_steps,
+            num_training_steps=95000
+        )
+        lr_dict = {
+            # REQUIRED: The scheduler instance
+            'scheduler': lr_scheduler,
+            # The unit of the scheduler's step size, could also be 'step'.
+            # 'epoch' updates the scheduler on epoch end whereas 'step'
+            # updates it after a optimizer update.
+            'interval': 'step',
+            # # How many epochs/steps should pass between calls to
+            # # `scheduler.step()`. 1 corresponds to updating the learning
+            # # rate after every epoch/step.
+            # 'frequency': 1,
+        }
+
+        return {
+            'optimizer': optimizer,
+            'lr_scheduler': lr_dict
+        }
 
     def training_step(self, batch, batch_idx):
-        # if self.local_rank==0:
-        #     print(batch)
-        #     strings = self.tokenizer.batch_decode(batch["input_ids"])
-        #     labels2 = batch["labels"]
-        #     labels2 = torch.where(labels2 != -100, labels2, self.tokenizer.pad_token_id)
-        #     strings2 = self.tokenizer.batch_decode(labels2)
-        #     # print(strings2)
-        #     for s1,s2 in zip(strings,strings2):
-        #         print(f"{s1}\t{s2}")
-        loss = self.model(**batch).loss
+        result = self.model(**batch)
+        if self.label_smoothing==0:
+            loss = result.loss
+        else:
+            labels = batch["labels"]
+            loss = loss_label_smoothing(result, labels,self.label_pad_token_id, self.label_smoothing)
+            self.log('original_train_loss', result.loss, on_epoch=True, on_step=True)
         self.log('train_loss', loss, on_epoch=True,on_step=True)
         return loss
 
@@ -254,8 +294,6 @@ class S2STransformer(pl.LightningModule):
             new_tensor[indices] = data
             return new_tensor
 
-
-
         if isinstance(generated_tokens, tuple):
             generated_tokens = generated_tokens[0]
         if self.ignore_pad_token_for_loss:
@@ -280,8 +318,11 @@ class S2STransformer(pl.LightningModule):
         return decoded_preds, decoded_labels
 
 
+
+
+
+
     def validation_step(self,batch, batch_idx):
-        # print(batch.keys(),self.trainer.local_rank)
         decoded_preds, decoded_labels = self._generate(batch)
         self.rouge_metric.add_batch(predictions=decoded_preds, references=decoded_labels)
 
@@ -467,6 +508,18 @@ class S2STransformer(pl.LightningModule):
         parser.add_argument("--num_train_epochs", type=int, default=3,
                             help="Total number of training epochs to perform.")
         parser.add_argument(
+            "--label_smoothing",
+            type=float,
+            default=0,
+            help="if 0 then use default loss from model.forward, otherwise compute loss twice",
+        )
+        parser.add_argument(
+            "--clip_norm",
+            type=float,
+            default=0.0,
+            help="clip gradient respect to norm of weight in case of gradient explosion",
+        )
+        parser.add_argument(
             "--max_train_steps",
             type=int,
             default=None,
@@ -480,7 +533,7 @@ class S2STransformer(pl.LightningModule):
         )
         parser.add_argument(
             "--lr_scheduler_type",
-            type=SchedulerType,
+            type=str,
             default="linear",
             help="The scheduler type to use.",
             choices=["linear", "cosine", "cosine_with_restarts", "polynomial", "constant", "constant_with_warmup"],
@@ -506,7 +559,7 @@ if __name__ == '__main__':
 
     # add PROGRAM level args
     parser.add_argument('--gpus', type=int, default=1)
-    parser.add_argument('--notification_email', type=str, default='will@email.com')
+    # parser.add_argument('--notification_email', type=str, default='will@email.com')
 
     # add model specific args
     parser = S2STransformer.add_model_specific_args(parser)
@@ -519,21 +572,24 @@ if __name__ == '__main__':
         verbose=True,
         dirpath= argument.output_dir,
         filename='s2s_with_aux-{epoch:02d}-{rouge1:.2f}',
-        save_top_k=10,
+        save_top_k=5,
         mode='max',
-        # every_n_val_epochs=1
+        every_n_val_epochs=1
     )
+    lr_monitor = LearningRateMonitor(logging_interval='step')
     if torch.cuda.is_available():
         trainer = Trainer(gpus=argument.gpus,
                           accelerator='ddp',
                           logger=wandb_logger,
-                          callbacks=[checkpoint_callback]
-                          # val_check_interval=0.01
+                          gradient_clip_val = argument.clip_norm,
+                          precision=16,
+                          callbacks=[checkpoint_callback,lr_monitor],
+                          val_check_interval=0.25
                           )
     else:
         trainer = Trainer(logger=wandb_logger,
-                          callbacks=[checkpoint_callback]
-                          # val_check_interval=0.01
+                          callbacks=[checkpoint_callback,lr_monitor],
+                          val_check_interval=0.25
                           )
     wandb_logger.watch(model)
     trainer.fit(model)
