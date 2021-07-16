@@ -318,10 +318,6 @@ class S2STransformer(pl.LightningModule):
         return decoded_preds, decoded_labels
 
 
-
-
-
-
     def validation_step(self,batch, batch_idx):
         decoded_preds, decoded_labels = self._generate(batch)
         self.rouge_metric.add_batch(predictions=decoded_preds, references=decoded_labels)

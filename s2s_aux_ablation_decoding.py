@@ -16,9 +16,9 @@ from transformers import AutoConfig, AutoTokenizer, AutoModelForSeq2SeqLM, DataC
 from utils import summarization_name_mapping
 
 
-class S2SAuxDecode(pl.LightningModule):
+class S2SAuxDecode_Albation(pl.LightningModule):
     def __init__(self,hparams, *args, **kwargs):
-        super(S2SAuxDecode, self).__init__()
+        super(S2SAuxDecode_Albation, self).__init__()
         self.save_hyperparameters()
         # print(self.hparams['hparams'])
         model_output_name = pathlib.Path(self.hparams['hparams'].output_dir, "model.bin").as_posix()
@@ -99,27 +99,34 @@ class S2SAuxDecode(pl.LightningModule):
         max_source_length = self.hparams['hparams'].max_source_length
         max_target_length = self.hparams['hparams'].max_target_length
 
-        task_prefix = "sum"
-        nli_prefix = self.hparams['hparams'].nli_prefix
+        task_prefix = self.hparams['hparams'].task_prefix
+        # nli_prefix = self.hparams['hparams'].nli_prefix
 
+        if self.hparams['hparams'].nli_prefix is not None:
+            nli_prefix = f"[{self.hparams['hparams'].nli_prefix}]"
+        else:
+            nli_prefix = None
 
+        if self.hparams['hparams'].task_prefix is not None:
+            task_prefix = f"[{self.hparams['hparams'].task_prefix}]"
+        else:
+            task_prefix = None
 
-        prefix = f"[{task_prefix}] [{nli_prefix}] "
-
-
+        prefixs = [task_prefix,nli_prefix]
+        prefixs = [item for item in prefixs if item is not None]
+        prefixs = " ".join(prefixs)+" "
+        print(prefixs)
         def preprocess_function_ent(examples):
             padding = "max_length" if pad_to_max_length else False
             inputs = examples[text_column]
             targets = examples[summary_column]
-            inputs = [prefix + inp for inp in inputs]
+            inputs = [prefixs + inp for inp in inputs]
             model_inputs = tokenizer(inputs, max_length=max_source_length, padding=padding,
                                      truncation=True)
-            # Setup the tokenizer for targets
             with tokenizer.as_target_tokenizer():
                 labels = tokenizer(targets, max_length=max_target_length, padding=padding,
                                    truncation=True)
             model_inputs["labels"] = labels["input_ids"]
-            # print(examples["id"])
             model_inputs["id"] = [int(num) for num in examples["id"]]
             return model_inputs
 
@@ -130,53 +137,6 @@ class S2SAuxDecode(pl.LightningModule):
             num_proc=4
         )
 
-        # prefix = "[sum] [con] "
-        # def preprocess_function_con(examples):
-        #     padding = "max_length" if pad_to_max_length else False
-        #     inputs = examples[text_column]
-        #     targets = examples[summary_column]
-        #     inputs = [prefix + inp for inp in inputs]
-        #     model_inputs = tokenizer(inputs, max_length=max_source_length, padding=padding,
-        #                              truncation=True)
-        #     # Setup the tokenizer for targets
-        #     with tokenizer.as_target_tokenizer():
-        #         labels = tokenizer(targets, max_length=max_target_length, padding=padding,
-        #                            truncation=True)
-        #     model_inputs["labels"] = int(labels["input_ids"])
-        #     model_inputs["id"] = int(examples["id"])
-        #     return model_inputs
-        #
-        #
-        # processed_datasets_con = raw_datasets_valid.map(
-        #     function=preprocess_function_con,
-        #     batched=True,
-        #     remove_columns=column_names,
-        #     num_proc=4
-        # )
-        #
-        # #neu
-        # prefix = "[sum] [neu] "
-        # def preprocess_function_neu(examples):
-        #     padding = "max_length" if pad_to_max_length else False
-        #     inputs = examples[text_column]
-        #     targets = examples[summary_column]
-        #     inputs = [prefix + inp for inp in inputs]
-        #     model_inputs = tokenizer(inputs, max_length=max_source_length, padding=padding,
-        #                              truncation=True)
-        #     # Setup the tokenizer for targets
-        #     with tokenizer.as_target_tokenizer():
-        #         labels = tokenizer(targets, max_length=max_target_length, padding=padding,
-        #                            truncation=True)
-        #     model_inputs["labels"] = int(labels["input_ids"])
-        #     model_inputs["id"] = int(examples["id"])
-        #     return model_inputs
-        #
-        # processed_datasets_neu = raw_datasets_valid.map(
-        #     function=preprocess_function_neu,
-        #     batched=True,
-        #     remove_columns=column_names,
-        #     num_proc=4
-        # )
 
         data_collator = DataCollatorForSeq2Seq(
             self.tokenizer,
@@ -188,14 +148,15 @@ class S2SAuxDecode(pl.LightningModule):
 
 
 
+
+
         self.ent_dataset = processed_datasets_ent
-        # self.neu_dataset = processed_datasets_neu
-        # self.con_dataset = processed_datasets_con
-        # self.ori_dataset = processed_datasets_ori
         self.data_collator = data_collator
 
         # print(len(self.ent_dataset))
         self.rouge_metric = load_metric('rouge')
+        if self.local_rank==0:
+            print(self.tokenizer.decode(self.ent_dataset[10]["input_ids"]))
 
     def val_dataloader(self) -> Union[DataLoader, List[DataLoader]]:
         return DataLoader(
@@ -290,8 +251,8 @@ class S2SAuxDecode(pl.LightningModule):
                 result = [score for name, score in result.items()]
                 print(result)
                 # print(self.res)
-                with open(f"{self.hparams['hparams'].nli_prefix}res.txt","w") as outputfile:
-                    json.dump(self.res,outputfile)
+            with open(f"{self.hparams['hparams'].task_prefix}{self.hparams['hparams'].nli_prefix}res.txt","w") as outputfile:
+                json.dump(self.res,outputfile)
 
 
 
@@ -408,8 +369,9 @@ class S2SAuxDecode(pl.LightningModule):
             default=32,
             help="Batch size (per device) for the evaluation dataloader.",
         )
-        parser.add_argument("--output_dir", type=str, default=None, help="Where to store the final model.")
-        parser.add_argument("--nli_prefix", type=str, required=True, help="nli prefix to dataloader.")
+        parser.add_argument("--output_dir", type=str, default = None, help="Where to store the final model.")
+        parser.add_argument("--nli_prefix", type=str, default = None, help="nli prefix to dataloader.")
+        parser.add_argument("--task_prefix", type=str, default=None, help="task prefix to dataloader.")
         # nli_prefix
 
         return parser
@@ -419,9 +381,9 @@ if __name__ == '__main__':
 
     # add PROGRAM level args
     parser.add_argument('--gpus', type=int, default=1)
-    parser = S2SAuxDecode.add_model_specific_args(parser)
+    parser = S2SAuxDecode_Albation.add_model_specific_args(parser)
     argument = parser.parse_args()
-    model = S2SAuxDecode(argument)
+    model = S2SAuxDecode_Albation(argument)
     if torch.cuda.is_available() and argument.gpus>1:
         trainer = Trainer(
                           gpus=argument.gpus,
