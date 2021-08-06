@@ -4,4 +4,5 @@ facebook/bart-large-xsum \
 --dataset_name \
 xsum \
 --gpus 4 \
---num_beams 6
+--num_beams 5 \
+--per_device_eval_batch_size 4

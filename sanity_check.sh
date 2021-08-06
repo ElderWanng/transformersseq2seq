@@ -5,9 +5,10 @@ python sanity_check.py \
  $CACHE \
  --model_name \
  facebook/bart-large \
---gpus $1 \
+--gpus 2 \
 --num_beams 6 \
 --nli_prefix ent \
 --task_prefix aux \
 --multinli_path \
-$SCRATCH/datas/multinli_1.0
+$SCRATCH/datas/multinli_1.0 \
+#--per_device_eval_batch_size 1

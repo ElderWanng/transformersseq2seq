@@ -1,52 +1,101 @@
-# # from datasets import list_metrics,load_metric
-# # metrics_list = list_metrics()
-# # len(metrics_list)
-# # print(', '.join(metric for metric in metrics_list))
-# # pred = "Police in the US state of California are searching for a woman who was kidnapped on Monday."
-# # ref = "Denise Huskins, 30, works as a physical therapist at a Kaiser Hospital, CNN affiliate KGO reports.\nHuskins was taken from her boyfriend's residence, her cousin tells CNN affiliate KPIX."
-# # metric = load_metric("rouge")
-# #
-# #
-# #
-# #
-# # # preds1 = ['Singer-songwriter David Crosby has been arrested on suspicion of driving under the influence of alcohol after he hit a jogger in California.', 'People have been using Twitter to ask me what they want to know about Jesus, John the Baptist and the Shroud of Turin.', 'The Clinton Foundation has been at the centre of a fundraising controversy over the last few weeks.', 'The United States is marking the 70th anniversary of the assassination of its first ambassador to Guatemala, John Gordon Mein.', 'A British military worker has tested positive for the Ebola virus in Sierra Leone, officials say.', 'As a journalist, I seek intellectual certainty, but when it comes to faith, God, and religion, the more questions I ask the more complex the answers become.', "Nigeria's former military ruler Muhammadu Buhari has won the presidential election, early results show.", 'The Germanwings co-pilot who deliberately crashed his plane into the French Alps on Tuesday, killing all 150 people on board, had sought treatment for mental illness, reports say.', 'One of the oldest fraternities in the United States has been suspended by the University of Oklahoma.', 'In our series of letters from African-American journalists, filmmaker and columnist Farai Sevenzo looks at the growing tensions between police and communities.', 'The founder of Meerkat is answering your questions about the app, the SXSW festival and entrepreneurship.', 'A woman who was convicted of murdering her six-year-old son in 1989 has been cleared of all charges.', 'Iraqi forces are advancing on the city of Tikrit, with the help of Iran, reports say.', 'On this edition of CNN Student News, we look at some of the stories you may have missed.', 'More than 1,800 sea lion pups have been rescued so far this year, according to the US government.', "In our series of letters from women, Sargent Shriver looks at how women can help fight Alzheimer's disease."]
-# # # preds2 = ['Singer-songwriter David Crosby has been arrested on suspicion of driving under the influence of alcohol after he hit a jogger in California.', 'People have been using Twitter to ask me what they want to know about Jesus, John the Baptist and the Shroud of Turin.', 'The Clinton Foundation has been at the centre of a fundraising controversy over the last few weeks.', 'The United States is marking the 70th anniversary of the assassination of its first ambassador to Guatemala, John Gordon Mein.', 'A British military worker has tested positive for the Ebola virus in Sierra Leone, officials say.', 'As a journalist, I seek intellectual certainty, but when it comes to faith, God, and religion, the more questions I ask the more complex the answers become.', "Nigeria's former military ruler Muhammadu Buhari has won the presidential election, early results show.", 'The Germanwings co-pilot who deliberately crashed his plane into the French Alps on Tuesday, killing all 150 people on board, had sought treatment for mental illness, reports say.', 'One of the oldest fraternities in the United States has been suspended by the University of Oklahoma.', 'In our series of letters from African-American journalists, filmmaker and columnist Farai Sevenzo looks at the growing tensions between police and communities.', 'The founder of Meerkat is answering your questions about the app, the SXSW festival and entrepreneurship.', 'A woman who was convicted of murdering her six-year-old son in 1989 has been cleared of all charges.', 'Iraqi forces are advancing on the city of Tikrit, with the help of Iran, reports say.', 'On this edition of CNN Student News, we look at some of the stories you may have missed.', 'More than 1,800 sea lion pups have been rescued so far this year, according to the US government.', "In our series of letters from women, Sargent Shriver looks at how women can help fight Alzheimer's disease."]
-# # # labels1 = ['Accident happens in Santa Ynez, California, near where Crosby lives.\nThe jogger suffered multiple fractures; his injuries are not believed to be life-threatening.', 'Religion professor Candida Moss appears in each episode of the program.\nMoss was part of the original study to determine if relics found in Bulgaria could be the bones of John the Baptist.', 'Clinton Foundation has taken money from foreign governments.\nBill Clinton:  "I believe we have done a lot more good than harm"', 'Several U.S. diplomats have died after being attacked.\nThey include then-Ambassadors Christopher Stevens, John Mein and Francis Meloy.', 'Spokesperson: Experts are investigating how the UK military health care worker got Ebola.\nIt is being decided if the military worker infected in Sierra Leone will return to England.\nThere have been some 24,000 reported cases and 10,000 deaths in the latest Ebola outbreak.', 'Kyra Phillips became a born-again Christian as a teen.\nShe attended a Christian college, but left after her sophomore year.\nPhillips says she now considers herself a seeker of spiritual enlightenment.', "Incumbent President Goodluck Jonathan acknowledges defeat, says he delivered on promise of fair elections.\nMuhammadu Buhari's party says Jonathan called to concede even before final results are announced.\nBuhari is a 72-year-old retired major general who ruled in Nigeria in the 1980s.", 'Reuters reports German newspaper says Lubitz took break in 2009 due to depression.\nRipped medical-leave notes found at his home indicate co-pilot hid an illness, officials say.\nInvestigators found no goodbye letter or evidence of political or religious motivation.', "Sigma Alpha Epsilon is being tossed out by the University of Oklahoma.\nIt's also run afoul of officials at Yale, Stanford and Johns Hopkins in recent months.", 'Two police officers were shot Wednesday in Ferguson.\nHank Johnson, Michael Shank: Policing style needs rethink.', 'Join Meerkat founder Ben Rubin for a live chat at 2 p.m.\nET Wednesday.\nFollow @benrbn and @lauriesegallcnn on Meerkat.\nUse hashtag #CNNInstantStartups to join the conversation on Twitter.', 'Debra Milke was convicted of murder in her son\'s death, given the death penalty.\nThere was no evidence tying her to the crime, but a detective said she confessed.\nThis detective had a "history of misconduct," including lying under oath.', "Iraqi forces make some progress as they seek to advance toward Tikrit.\nThe city, best known to Westerners as Saddam Hussein's birthplace, was taken by ISIS in June.", 'This page includes the show Transcript.\nUse the Transcript to help students with reading comprehension and vocabulary.\nAt the bottom of the page, comment for a chance to be mentioned on CNN Student News.\nYou must be a teacher or a student age 13 or older to request a mention on the CNN Student News Roll Call.', '"There has been an unusually high number of sea lions stranded since January," NOAA representative says.\nThe speculation is mothers are having difficulty finding food, leaving pups alone too long or malnourished.', "Maria Shriver's father was stricken by Alzheimer's, a growing scourge in U.S.\nWomen are disproportionately affected as sufferers and caregivers, she says.\nWipe Out Alzheimer's Challenge is launching to fill in for lagging government funding, she says."]
-# # # labels2 = ['Accident happens in Santa Ynez, California, near where Crosby lives.\nThe jogger suffered multiple fractures; his injuries are not believed to be life-threatening.', 'Religion professor Candida Moss appears in each episode of the program.\nMoss was part of the original study to determine if relics found in Bulgaria could be the bones of John the Baptist.', 'Clinton Foundation has taken money from foreign governments.\nBill Clinton:  "I believe we have done a lot more good than harm"', 'Several U.S. diplomats have died after being attacked.\nThey include then-Ambassadors Christopher Stevens, John Mein and Francis Meloy.', 'Spokesperson: Experts are investigating how the UK military health care worker got Ebola.\nIt is being decided if the military worker infected in Sierra Leone will return to England.\nThere have been some 24,000 reported cases and 10,000 deaths in the latest Ebola outbreak.', 'Kyra Phillips became a born-again Christian as a teen.\nShe attended a Christian college, but left after her sophomore year.\nPhillips says she now considers herself a seeker of spiritual enlightenment.', "Incumbent President Goodluck Jonathan acknowledges defeat, says he delivered on promise of fair elections.\nMuhammadu Buhari's party says Jonathan called to concede even before final results are announced.\nBuhari is a 72-year-old retired major general who ruled in Nigeria in the 1980s.", 'Reuters reports German newspaper says Lubitz took break in 2009 due to depression.\nRipped medical-leave notes found at his home indicate co-pilot hid an illness, officials say.\nInvestigators found no goodbye letter or evidence of political or religious motivation.', "Sigma Alpha Epsilon is being tossed out by the University of Oklahoma.\nIt's also run afoul of officials at Yale, Stanford and Johns Hopkins in recent months.", 'Two police officers were shot Wednesday in Ferguson.\nHank Johnson, Michael Shank: Policing style needs rethink.', 'Join Meerkat founder Ben Rubin for a live chat at 2 p.m.\nET Wednesday.\nFollow @benrbn and @lauriesegallcnn on Meerkat.\nUse hashtag #CNNInstantStartups to join the conversation on Twitter.', 'Debra Milke was convicted of murder in her son\'s death, given the death penalty.\nThere was no evidence tying her to the crime, but a detective said she confessed.\nThis detective had a "history of misconduct," including lying under oath.', "Iraqi forces make some progress as they seek to advance toward Tikrit.\nThe city, best known to Westerners as Saddam Hussein's birthplace, was taken by ISIS in June.", 'This page includes the show Transcript.\nUse the Transcript to help students with reading comprehension and vocabulary.\nAt the bottom of the page, comment for a chance to be mentioned on CNN Student News.\nYou must be a teacher or a student age 13 or older to request a mention on the CNN Student News Roll Call.', '"There has been an unusually high number of sea lions stranded since January," NOAA representative says.\nThe speculation is mothers are having difficulty finding food, leaving pups alone too long or malnourished.', "Maria Shriver's father was stricken by Alzheimer's, a growing scourge in U.S.\nWomen are disproportionately affected as sufferers and caregivers, she says.\nWipe Out Alzheimer's Challenge is launching to fill in for lagging government funding, she says."]
-# # # metric.add_batch(predictions = preds1, references = labels1)
-# # # result = metric.compute()
-# # # result = {key: value.mid.fmeasure * 100 for key, value in result.items()}
-# # # result = {k: round(v, 4) for k, v in result.items()}
-# # # print(result)
-# # # metric.add_batch(predictions = preds2, references = labels2)
-# # #
-# # # result = metric.compute()
-# # # result = {key: value.mid.fmeasure * 100 for key, value in result.items()}
-# # # result = {k: round(v, 4) for k, v in result.items()}
-# # # print(result)
-# from transformers import AutoTokenizer, AutoConfig
-# 
-# tokenizer = AutoTokenizer.from_pretrained("facebook/bart-base")
-# tokenizer.save_pretrained('./test/saved_model/')
-# # AutoTokenizer.from_pretrained("./token")
-# tokenizer = AutoTokenizer.from_pretrained('./test/bert_saved_model/')
-# # config = AutoConfig.from_pretrained("facebook/bart-base")
-# # # print(config)
-# # config.save_pretrained("bart-base.json")
-# from datasets import load_dataset
-import nltk
-from nltk import ngrams
+import random
+import numpy
+from spacy.lang.en import English
+from transformers import T5Tokenizer, T5Config, T5ForConditionalGeneration
+import torch
+import re
+# # assert tok.batch_decode(generated_ids, skip_special_tokens=True) == ['UN Chief Says There Is No Plan to Stop Chemical Weapons in Syria']
 
-sentence = 'this is a foo bar sentences and i want to ngramize it'
 
-n = 6
-sixgrams = ngrams(sentence.split(), n)
+nlp = English()
+tokenizer = nlp.tokenizer
 
-print(('this1', 'is', 'a', 'foo', 'bar', 'sentences') in list(sixgrams))
+original = "A man in central Germany tried to leave his house by the front door only to find a brick wall there."
+tokns = tokenizer(original)
+tokns = [tok.text for tok in tokns]
 
-print(nltk.tokenize.word_tokenize(sentence))
-# sents = nltk.sent_tokenize("And now for something completely different. I love you.")
-# word = []
-# for sent in sents:
-#     word.append(nltk.word_tokenize(sent))
-# print(word)
+def helper():
+
+    random_index = random.randint(0, len(tokns)-1)
+
+    span_len = numpy.random.poisson(lam=3)
+    ##don't at end
+    tokens_to_end = len(tokns) - random_index-1
+
+    span_len = min(span_len, tokens_to_end)
+
+    if span_len > 0:
+        del tokns[random_index:(random_index + span_len)]
+        tokns.insert(random_index, "<placeholder>")
+    elif span_len == 0:
+        tokns.insert(random_index, "<placeholder>")
+
+n = random.randint(2,4)
+for _ in range(n):
+    helper()
+
+counter = 0
+for i in range(len(tokns)):
+
+    if tokns[i] == "<placeholder>":
+        tokns[i] = f"<extra_id_{counter}>"
+        counter+=1
+
+
+text = " ".join(tokns)
+
+text = "Wales fly - <extra_id_0> Dan Biggar says he is learning to cope with the pressure of wearing the famous number <extra_id_1> ."
+print(text)
+T5_PATH = 't5-base' # "t5-small", "t5-base", "t5-large", "t5-3b", "t5-11b"
+
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # My envirnment uses CPU
+
+t5_tokenizer = T5Tokenizer.from_pretrained(T5_PATH)
+t5_config = T5Config.from_pretrained(T5_PATH)
+t5_mlm = T5ForConditionalGeneration.from_pretrained(T5_PATH, config=t5_config).to(DEVICE)
+
+# Input text
+# text = 'India is a <extra_id_0> of the world. </s>'/
+
+encoded = t5_tokenizer.encode_plus(text, add_special_tokens=True, return_tensors='pt')
+input_ids = encoded['input_ids'].to(DEVICE)
+
+# Generaing 20 sequences with maximum length set to 5
+outputs = t5_mlm.generate(input_ids=input_ids,
+                          num_beams=200, num_return_sequences=1)
+
+for i in outputs:
+    print(t5_tokenizer.decode(i, skip_special_tokens=False, clean_up_tokenization_spaces=False))
+
+
+# decoded = "<pad> <extra_id_0> dead dog<extra_id_1> dead dog . . .<extra_id_2> dead dog<extra_id_3> dead dog<extra_id_4>"
+
+num_to_replace =  len(re.findall(r'<extra_id_\d+>',text))
+
+def _filter(output):
+    _ori = text[:]
+    # print(t5_tokenizer.decode(output, skip_special_tokens=False, clean_up_tokenization_spaces=False))
+    # The first token is <unk> (inidex at 0) and the second token is <extra_id_0> (indexed at 32099)
+    _txt = t5_tokenizer.decode(output[1:], skip_special_tokens=False, clean_up_tokenization_spaces=False)
+    _txt = _txt.strip()
+    spans = re.split(r'<extra_id_\d>', _txt)
+
+    spans = [span.strip()  for span in spans if span!=""]
+
+    for i in range(num_to_replace):
+        # print(spans[i])
+        _ori = _ori.replace(f"<extra_id_{i}>", spans[i])
+    return _ori
+
+
+
+
+    # if end_token in _txt:
+    #     _end_token_index = _txt.index(end_token)
+    #     return _result_prefix + _txt[:_end_token_index] + _result_suffix
+    # else:
+    #     return _result_prefix + _txt + _result_suffix
+
+results = list(map(_filter, outputs))
+for i in results:
+    print(i)
